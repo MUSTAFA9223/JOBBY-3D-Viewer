@@ -50,6 +50,22 @@ import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.160.1/examples/js
 import {OrbitControls} from 'https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/controls/OrbitControls.js';
 import {animationBounds,cameraFrame} from './viewer-math.js?v=2';
 
+const CHARACTER_FILES=[
+  'glTF/BaseCharacter.gltf','glTF/BlueSoldier_Female.gltf','glTF/BlueSoldier_Male.gltf',
+  'glTF/Casual2_Female.gltf','glTF/Casual2_Male.gltf','glTF/Casual3_Female.gltf','glTF/Casual3_Male.gltf',
+  'glTF/Casual_Bald.gltf','glTF/Casual_Female.gltf','glTF/Casual_Male.gltf','glTF/Chef_Female.gltf',
+  'glTF/Chef_Hat.gltf','glTF/Chef_Male.gltf','glTF/Cow.gltf','glTF/Cowboy_Female.gltf',
+  'glTF/Cowboy_Hair.gltf','glTF/Cowboy_Male.gltf','glTF/Doctor_Female_Old.gltf','glTF/Doctor_Female_Young.gltf',
+  'glTF/Doctor_Male_Old.gltf','glTF/Doctor_Male_Young.gltf','glTF/Elf.gltf','glTF/Goblin_Female.gltf',
+  'glTF/Goblin_Male.gltf','glTF/Kimono_Female.gltf','glTF/Kimono_Male.gltf','glTF/Knight_Golden_Female.gltf',
+  'glTF/Knight_Golden_Male.gltf','glTF/Knight_Male.gltf','glTF/Ninja_Female.gltf','glTF/Ninja_Male.gltf',
+  'glTF/Ninja_Male_Hair.gltf','glTF/Ninja_Sand.gltf','glTF/Ninja_Sand_Female.gltf','glTF/OldClassy_Female.gltf',
+  'glTF/OldClassy_Male.gltf','glTF/Pirate_Female.gltf','glTF/Pirate_Male.gltf','glTF/Pug.gltf',
+  'glTF/Soldier_Female.gltf','glTF/Soldier_Male.gltf','glTF/Suit_Female.gltf','glTF/Suit_Male.gltf',
+  'glTF/VikingHelmet.gltf','glTF/Viking_Female.gltf','glTF/Viking_Male.gltf','glTF/Witch.gltf','glTF/Wizard.gltf',
+  'glTF/Worker_Female.gltf','glTF/Worker_Male.gltf','glTF/Zombie_Female.gltf','glTF/Zombie_Male.gltf'
+];
+
 const status=document.querySelector('#status'), character=document.querySelector('#character'), animation=document.querySelector('#animation'), view=document.querySelector('#view');
 const play=document.querySelector('#play'), reset=document.querySelector('#reset'), colorView=document.querySelector('#colors');
 const telegram=window.Telegram?.WebApp;
@@ -74,7 +90,7 @@ async function boot(){
   const fill=new THREE.DirectionalLight(0xffffff,1);fill.position.set(-4,3,-3);scene.add(fill);
   const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=false;
   const loader=new GLTFLoader();const clock=new THREE.Clock();
-  let archive,files=[],entries=[],model,mixer,clips=[],paused=false,requestId=0,currentBounds;
+  let archive,archivePromise,entries=[],model,mixer,clips=[],paused=false,requestId=0,currentBounds;
   let boundsCache=new Map(),originalMaterials=new Map(),flatMaterials=new Map();
   function fit(){
     if(!model||!currentBounds)return;
@@ -119,6 +135,7 @@ async function boot(){
       let gltf;
       if(source.kind==='external')gltf=await loader.loadAsync(source.path);
       else{
+        if(!archive){status.textContent='Downloading character pack…';await archivePromise}
         const raw=await archive.file(source.path).async('string');
         gltf=await new Promise((resolve,reject)=>loader.parse(raw,'',resolve,reject));
       }
@@ -151,19 +168,18 @@ async function boot(){
   }
   new ResizeObserver(resize).observe(view);resize();
   renderer.setAnimationLoop(()=>{const delta=Math.min(clock.getDelta(),.1);if(mixer)mixer.update(delta);controls.update();renderer.render(scene,camera)});
-  entries=[{kind:'external',path:'./jobby.glb?v=1',label:'JOBBY · New'}];
+  entries=[{kind:'external',path:'./jobby.glb?v=1',label:'JOBBY · New'},...CHARACTER_FILES.map(path=>({kind:'archive',path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' ')}))];
   character.replaceChildren(...entries.map((entry,i)=>new Option(entry.label,String(i))));
-  document.querySelector('#count').textContent='1 model · loading others…';
+  document.querySelector('#count').textContent=entries.length+' models';
   character.value='0';
-  character.disabled=false;await showCharacter();
-  try{
+  await showCharacter();
+  archivePromise=(async()=>{
     const response=await fetch('./characters.zip');if(!response.ok)throw Error('Character pack could not be downloaded ('+response.status+').');
     archive=await JSZip.loadAsync(await response.arrayBuffer());
-    files=Object.keys(archive.files).filter(n=>n.toLowerCase().endsWith('.gltf')).sort();
-    entries.push(...files.map(path=>({kind:'archive',path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' ')})));
-    character.replaceChildren(...entries.map((entry,i)=>new Option(entry.label,String(i))));character.value='0';
-    document.querySelector('#count').textContent=entries.length+' models';
-  }catch(e){document.querySelector('#count').textContent='1 model';console.error(e)}
+    return archive;
+  })();
+  archivePromise.catch(e=>console.error(e));
+  character.disabled=false;
 }
 boot().catch(e=>{status.textContent=e.message;document.querySelector('#count').textContent='Unable to load';console.error(e)});
 </script>

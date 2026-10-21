@@ -151,16 +151,19 @@ async function boot(){
   }
   new ResizeObserver(resize).observe(view);resize();
   renderer.setAnimationLoop(()=>{const delta=Math.min(clock.getDelta(),.1);if(mixer)mixer.update(delta);controls.update();renderer.render(scene,camera)});
-  status.textContent='Downloading character pack…';
-  const response=await fetch('./characters.zip');if(!response.ok)throw Error('Character pack could not be downloaded ('+response.status+').');
-  archive=await JSZip.loadAsync(await response.arrayBuffer());
-  files=Object.keys(archive.files).filter(n=>n.toLowerCase().endsWith('.gltf')).sort();
-  if(!files.length)throw Error('No character models were found in the archive.');
-  entries=[{kind:'external',path:'./jobby.glb?v=1',label:'JOBBY · New'},...files.map(path=>({kind:'archive',path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' ')}))];
+  entries=[{kind:'external',path:'./jobby.glb?v=1',label:'JOBBY · New'}];
   character.replaceChildren(...entries.map((entry,i)=>new Option(entry.label,String(i))));
-  document.querySelector('#count').textContent=entries.length+' models';
+  document.querySelector('#count').textContent='1 model · loading others…';
   character.value='0';
   character.disabled=false;await showCharacter();
+  try{
+    const response=await fetch('./characters.zip');if(!response.ok)throw Error('Character pack could not be downloaded ('+response.status+').');
+    archive=await JSZip.loadAsync(await response.arrayBuffer());
+    files=Object.keys(archive.files).filter(n=>n.toLowerCase().endsWith('.gltf')).sort();
+    entries.push(...files.map(path=>({kind:'archive',path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' ')})));
+    character.replaceChildren(...entries.map((entry,i)=>new Option(entry.label,String(i))));character.value='0';
+    document.querySelector('#count').textContent=entries.length+' models';
+  }catch(e){document.querySelector('#count').textContent='1 model';console.error(e)}
 }
 boot().catch(e=>{status.textContent=e.message;document.querySelector('#count').textContent='Unable to load';console.error(e)});
 </script>

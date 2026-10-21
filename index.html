@@ -169,7 +169,7 @@ async function boot(){
   new ResizeObserver(resize).observe(view);resize();
   renderer.setAnimationLoop(()=>{const delta=Math.min(clock.getDelta(),.1);if(mixer)mixer.update(delta);controls.update();renderer.render(scene,camera)});
   entries=[
-    {path:'./jobby.glb?v=3',label:'JOBBY · Approved',external:true},
+    {path:'./jobby.glb?v=4',label:'JOBBY · Approved',external:true},
     ...CHARACTER_FILES.map(path=>({path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' '),external:false}))
   ];
   character.replaceChildren(...entries.map((entry,i)=>new Option(entry.label,String(i))));

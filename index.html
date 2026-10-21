@@ -132,8 +132,24 @@ async function boot(){
     const request=++requestId;status.textContent='Loading '+source.label;
     animation.disabled=true;play.disabled=true;reset.disabled=true;
     try{
-      if(!archive){status.textContent='Downloading character pack…';await archivePromise}
-      const raw=await archive.file(source.path).async('string');
+      let raw;
+      if(source.url){
+        const response=await fetch(source.url);
+        if(!response.ok)throw Error('Character could not be downloaded ('+response.status+').');
+        raw=await response.arrayBuffer();
+      }else{
+        if(!archive){
+          status.textContent='Downloading character pack…';
+          if(!archivePromise)archivePromise=(async()=>{
+            const response=await fetch('./characters.zip');
+            if(!response.ok)throw Error('Character pack could not be downloaded ('+response.status+').');
+            archive=await JSZip.loadAsync(await response.arrayBuffer());
+            return archive;
+          })().catch(e=>{archivePromise=null;throw e});
+          await archivePromise;
+        }
+        raw=await archive.file(source.path).async('string');
+      }
       const gltf=await new Promise((resolve,reject)=>loader.parse(raw,'',resolve,reject));
       if(request!==requestId){disposeRoot(gltf.scene);return}
       if(model){mixer.stopAllAction();mixer.uncacheRoot(model);scene.remove(model);disposeRoot(model)}
@@ -147,10 +163,10 @@ async function boot(){
         flatMaterials.set(o,Array.isArray(o.material)?o.material.map(makeFlat):makeFlat(o.material));
       });
       scene.add(model);mixer=new THREE.AnimationMixer(model);
-      animation.replaceChildren(...clips.map((a,i)=>new Option(a.name||('Animation '+(i+1)),String(i))));
-      animation.value=String(Math.max(0,clips.findIndex(a=>a.name==='Idle')));
+      animation.replaceChildren(...clips.map((a,i)=>new Option(a.name.split('|').pop()||('Animation '+(i+1)),String(i))));
+      animation.value=String(Math.max(0,clips.findIndex(a=>a.name.split('|').pop()==='Idle')));
       applyColors();selectAnimation();
-      document.querySelector('#note').textContent=source.path.endsWith('/BaseCharacter.gltf')?'BaseCharacter is a base mesh with neutral colors in the original file.':'';
+      document.querySelector('#note').textContent=source.label==='JOBBY'?clips.length+' animations · White body & purple details':source.path.endsWith('/BaseCharacter.gltf')?'BaseCharacter is a base mesh with neutral colors in the original file.':'';
       animation.disabled=!clips.length;play.disabled=!clips.length;reset.disabled=false;status.textContent='';
     }catch(e){if(request===requestId){status.textContent='Cannot load character: '+e.message;console.error(e)}}
   }
@@ -162,16 +178,10 @@ async function boot(){
   }
   new ResizeObserver(resize).observe(view);resize();
   renderer.setAnimationLoop(()=>{const delta=Math.min(clock.getDelta(),.1);if(mixer)mixer.update(delta);controls.update();renderer.render(scene,camera)});
-  entries=CHARACTER_FILES.map(path=>({path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' ')}));
+  entries=[{path:'models/JOBBY.glb',url:'./models/JOBBY.glb?v=20261022-white-purple',label:'JOBBY'},...CHARACTER_FILES.map(path=>({path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' ')}))];
   character.replaceChildren(...entries.map((entry,i)=>new Option(entry.label,String(i))));
   document.querySelector('#count').textContent=entries.length+' models';
-  character.value=String(entries.findIndex(entry=>entry.path.endsWith('/Casual_Male.gltf')));
-  archivePromise=(async()=>{
-    const response=await fetch('./characters.zip');if(!response.ok)throw Error('Character pack could not be downloaded ('+response.status+').');
-    archive=await JSZip.loadAsync(await response.arrayBuffer());
-    return archive;
-  })();
-  archivePromise.catch(e=>console.error(e));
+  character.value='0';
   character.disabled=false;await showCharacter();
 }
 boot().catch(e=>{status.textContent=e.message;document.querySelector('#count').textContent='Unable to load';console.error(e)});

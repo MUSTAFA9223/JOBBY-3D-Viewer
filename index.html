@@ -132,13 +132,9 @@ async function boot(){
     const request=++requestId;status.textContent='Loading '+source.label;
     animation.disabled=true;play.disabled=true;reset.disabled=true;
     try{
-      let gltf;
-      if(source.kind==='external')gltf=await loader.loadAsync(source.path);
-      else{
-        if(!archive){status.textContent='Downloading character pack…';await archivePromise}
-        const raw=await archive.file(source.path).async('string');
-        gltf=await new Promise((resolve,reject)=>loader.parse(raw,'',resolve,reject));
-      }
+      if(!archive){status.textContent='Downloading character pack…';await archivePromise}
+      const raw=await archive.file(source.path).async('string');
+      const gltf=await new Promise((resolve,reject)=>loader.parse(raw,'',resolve,reject));
       if(request!==requestId){disposeRoot(gltf.scene);return}
       if(model){mixer.stopAllAction();mixer.uncacheRoot(model);scene.remove(model);disposeRoot(model)}
       originalMaterials=new Map();flatMaterials=new Map();boundsCache=new Map();
@@ -154,9 +150,7 @@ async function boot(){
       animation.replaceChildren(...clips.map((a,i)=>new Option(a.name||('Animation '+(i+1)),String(i))));
       animation.value=String(Math.max(0,clips.findIndex(a=>a.name==='Idle')));
       applyColors();selectAnimation();
-      document.querySelector('#note').textContent=source.kind==='external'
-        ? 'New JOBBY model · lightweight mobile version · 7 animations'
-        : source.path.endsWith('/BaseCharacter.gltf')?'BaseCharacter is a base mesh with neutral colors in the original file.':'';
+      document.querySelector('#note').textContent=source.path.endsWith('/BaseCharacter.gltf')?'BaseCharacter is a base mesh with neutral colors in the original file.':'';
       animation.disabled=!clips.length;play.disabled=!clips.length;reset.disabled=false;status.textContent='';
     }catch(e){if(request===requestId){status.textContent='Cannot load character: '+e.message;console.error(e)}}
   }
@@ -168,18 +162,17 @@ async function boot(){
   }
   new ResizeObserver(resize).observe(view);resize();
   renderer.setAnimationLoop(()=>{const delta=Math.min(clock.getDelta(),.1);if(mixer)mixer.update(delta);controls.update();renderer.render(scene,camera)});
-  entries=[{kind:'external',path:'./jobby.glb?v=1',label:'JOBBY · New'},...CHARACTER_FILES.map(path=>({kind:'archive',path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' ')}))];
+  entries=CHARACTER_FILES.map(path=>({path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' ')}));
   character.replaceChildren(...entries.map((entry,i)=>new Option(entry.label,String(i))));
   document.querySelector('#count').textContent=entries.length+' models';
-  character.value='0';
-  await showCharacter();
+  character.value=String(entries.findIndex(entry=>entry.path.endsWith('/Casual_Male.gltf')));
   archivePromise=(async()=>{
     const response=await fetch('./characters.zip');if(!response.ok)throw Error('Character pack could not be downloaded ('+response.status+').');
     archive=await JSZip.loadAsync(await response.arrayBuffer());
     return archive;
   })();
   archivePromise.catch(e=>console.error(e));
-  character.disabled=false;
+  character.disabled=false;await showCharacter();
 }
 boot().catch(e=>{status.textContent=e.message;document.querySelector('#count').textContent='Unable to load';console.error(e)});
 </script>

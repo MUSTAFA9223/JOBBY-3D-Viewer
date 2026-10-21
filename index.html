@@ -74,7 +74,7 @@ async function boot(){
   const fill=new THREE.DirectionalLight(0xffffff,1);fill.position.set(-4,3,-3);scene.add(fill);
   const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=false;
   const loader=new GLTFLoader();const clock=new THREE.Clock();
-  let archive,files=[],model,mixer,clips=[],paused=false,requestId=0,currentBounds;
+  let archive,files=[],entries=[],model,mixer,clips=[],paused=false,requestId=0,currentBounds;
   let boundsCache=new Map(),originalMaterials=new Map(),flatMaterials=new Map();
   function fit(){
     if(!model||!currentBounds)return;
@@ -112,12 +112,16 @@ async function boot(){
     geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());
   }
   async function showCharacter(){
-    const f=files[Number(character.value)];if(!f)return;
-    const request=++requestId;status.textContent='Loading '+f.split('/').pop();
+    const source=entries[Number(character.value)];if(!source)return;
+    const request=++requestId;status.textContent='Loading '+source.label;
     animation.disabled=true;play.disabled=true;reset.disabled=true;
     try{
-      const raw=await archive.file(f).async('string');
-      const gltf=await new Promise((resolve,reject)=>loader.parse(raw,'',resolve,reject));
+      let gltf;
+      if(source.kind==='external')gltf=await loader.loadAsync(source.path);
+      else{
+        const raw=await archive.file(source.path).async('string');
+        gltf=await new Promise((resolve,reject)=>loader.parse(raw,'',resolve,reject));
+      }
       if(request!==requestId){disposeRoot(gltf.scene);return}
       if(model){mixer.stopAllAction();mixer.uncacheRoot(model);scene.remove(model);disposeRoot(model)}
       originalMaterials=new Map();flatMaterials=new Map();boundsCache=new Map();
@@ -133,7 +137,9 @@ async function boot(){
       animation.replaceChildren(...clips.map((a,i)=>new Option(a.name||('Animation '+(i+1)),String(i))));
       animation.value=String(Math.max(0,clips.findIndex(a=>a.name==='Idle')));
       applyColors();selectAnimation();
-      document.querySelector('#note').textContent=f.endsWith('/BaseCharacter.gltf')?'BaseCharacter is a base mesh with neutral colors in the original file.':'';
+      document.querySelector('#note').textContent=source.kind==='external'
+        ? 'New JOBBY model · lightweight mobile version · 7 animations'
+        : source.path.endsWith('/BaseCharacter.gltf')?'BaseCharacter is a base mesh with neutral colors in the original file.':'';
       animation.disabled=!clips.length;play.disabled=!clips.length;reset.disabled=false;status.textContent='';
     }catch(e){if(request===requestId){status.textContent='Cannot load character: '+e.message;console.error(e)}}
   }
@@ -150,9 +156,10 @@ async function boot(){
   archive=await JSZip.loadAsync(await response.arrayBuffer());
   files=Object.keys(archive.files).filter(n=>n.toLowerCase().endsWith('.gltf')).sort();
   if(!files.length)throw Error('No character models were found in the archive.');
-  character.replaceChildren(...files.map((f,i)=>new Option(f.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' '),String(i))));
-  document.querySelector('#count').textContent=files.length+' models';
-  character.value=String(Math.max(0,files.findIndex(f=>f.endsWith('/Casual_Male.gltf'))));
+  entries=[{kind:'external',path:'./jobby.glb?v=1',label:'JOBBY · New'},...files.map(path=>({kind:'archive',path,label:path.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' ')}))];
+  character.replaceChildren(...entries.map((entry,i)=>new Option(entry.label,String(i))));
+  document.querySelector('#count').textContent=entries.length+' models';
+  character.value='0';
   character.disabled=false;await showCharacter();
 }
 boot().catch(e=>{status.textContent=e.message;document.querySelector('#count').textContent='Unable to load';console.error(e)});

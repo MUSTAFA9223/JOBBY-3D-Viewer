@@ -4,6 +4,9 @@
 <header><b>JOBBY · 3D Characters</b><small id="count">Loading…</small></header>
 <main><div id="view"><div id="status">Preparing viewer…</div></div><section><div class="controls"><label>Character<select id="character"></select></label><label>Animation<select id="animation"></select></label></div><div class="controls"><button id="play">Pause</button><button id="reset">Reset camera</button></div><small>Drag to rotate · Pinch to zoom · <a href="https://t.me/JOBBY3DViewerBot">Telegram bot</a></small></section></main>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js"}}
+</script>
 <script type="module">
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
 import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';

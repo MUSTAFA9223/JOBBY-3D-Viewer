@@ -1,26 +1,159 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>JOBBY 3D Character Viewer</title><style>
-*{box-sizing:border-box}body{margin:0;background:#101622;color:#fff;font:15px system-ui}header{padding:14px 16px;background:#182235;display:flex;justify-content:space-between;align-items:center}main{display:grid;grid-template-rows:minmax(260px,1fr) auto;height:calc(100dvh - 55px)}#view{position:relative;min-height:0}canvas{display:block}#status{position:absolute;top:12px;left:12px;right:12px;text-align:center;pointer-events:none;color:#d7e2f7}section{padding:12px;background:#182235;display:grid;gap:10px}select,input,button{padding:11px;border:1px solid #3d4b62;border-radius:10px;background:#25334a;color:white;min-width:0}label{display:grid;gap:5px;font-size:12px;color:#c9d5e8}.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}button{cursor:pointer}small{color:#afbed6}a{color:#9bd8ff}</style></head><body>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101622">
+<title>JOBBY 3D Characters</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101622;color:#fff;font:15px system-ui}
+body{height:var(--app-height,100dvh);display:flex;flex-direction:column}
+header{flex:none;padding:12px 14px;background:#182235;display:flex;gap:8px;justify-content:space-between;align-items:center;min-width:0}
+header b{font-size:14px}header small{white-space:nowrap}
+main{flex:1;min-height:0;min-width:0;width:100%;display:grid;grid-template-rows:minmax(0,1fr) auto}
+#view{position:relative;overflow:hidden;min-width:0;min-height:0;width:100%}
+canvas{position:absolute;inset:0;display:block;width:100%;height:100%;touch-action:none}
+#status{position:absolute;z-index:1;top:12px;left:12px;right:12px;text-align:center;pointer-events:none;color:#d7e2f7;overflow-wrap:anywhere}
+section{min-width:0;padding:10px 12px max(10px,env(safe-area-inset-bottom));background:#182235;display:grid;gap:8px;max-height:55dvh;overflow-y:auto;overflow-x:hidden}
+.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;min-width:0}
+label{display:grid;gap:4px;min-width:0;font-size:12px;color:#c9d5e8}
+select,button{font:inherit;font-size:16px;padding:10px 8px;border:1px solid #3d4b62;border-radius:10px;background:#25334a;color:white;min-width:0;max-width:100%;width:100%;min-height:44px}
+select{text-overflow:ellipsis}button{cursor:pointer;font-size:14px}button:disabled,select:disabled{opacity:.5}
+.appearance{display:flex;gap:8px;align-items:center;min-width:0}.appearance label{flex:1}.appearance select{font-size:14px;min-height:36px;padding:7px 8px}
+small{color:#afbed6;font-size:11px;overflow-wrap:anywhere}a{color:#9bd8ff}
+#note:empty{display:none}
+@media(max-height:480px){header{padding:6px 12px}section{gap:5px;padding-top:6px;padding-bottom:6px}select,button{min-height:36px;padding:6px}section>small{display:none}}
+</style>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
 <header><b>JOBBY · 3D Characters</b><small id="count">Loading…</small></header>
-<main><div id="view"><div id="status">Preparing viewer…</div></div><section><div class="controls"><label>Character<select id="character"></select></label><label>Animation<select id="animation"></select></label></div><div class="controls"><button id="play">Pause</button><button id="reset">Reset camera</button></div><small>Drag to rotate · Pinch to zoom · <a href="https://t.me/JOBBY3DViewerBot">Telegram bot</a></small></section></main>
+<main>
+<div id="view"><div id="status" role="status" aria-live="polite">Preparing viewer…</div></div>
+<section>
+<div class="controls">
+<label>Character<select id="character" disabled></select></label>
+<label>Animation<select id="animation" disabled></select></label>
+</div>
+<div class="controls"><button id="play" disabled>Pause</button><button id="reset" disabled>Fit full character</button></div>
+<div class="appearance"><label>Color view<select id="colors"><option value="studio">Studio lighting</option><option value="original">Original colors · no lighting</option></select></label></div>
+<small id="note"></small>
+<small>Drag to rotate · Pinch to zoom · <a href="https://t.me/JOBBY3DViewerBot">Telegram bot</a></small>
+</section>
+</main>
 <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
-<script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js"}}
-</script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js"}}</script>
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js';
+import * as THREE from 'three';
 import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/loaders/GLTFLoader.js';
 import {OrbitControls} from 'https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/controls/OrbitControls.js';
+import {animationBounds,cameraFrame} from './viewer-math.js?v=2';
+
 const status=document.querySelector('#status'), character=document.querySelector('#character'), animation=document.querySelector('#animation'), view=document.querySelector('#view');
-const scene=new THREE.Scene();scene.background=new THREE.Color('#101622');const camera=new THREE.PerspectiveCamera(45,1,.01,500);camera.position.set(2,1.5,3.5);
-const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));view.appendChild(renderer.domElement);
-scene.add(new THREE.HemisphereLight(0xffffff,0x5b6786,2.5));const light=new THREE.DirectionalLight(0xffffff,2.2);light.position.set(3,7,5);scene.add(light);
-const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.target.set(0,1,0);
-const loader=new GLTFLoader();let archive,files=[],model,mixer,clock=new THREE.Clock(),paused=false;
-function fit(){if(!model)return;const box=new THREE.Box3().setFromObject(model),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3());controls.target.copy(center);camera.position.copy(center).add(new THREE.Vector3(size.length()*.8,size.length()*.45,size.length()*.8));camera.near=.01;camera.far=500;camera.updateProjectionMatrix();controls.update()}
-function selectAnimation(){if(!mixer)return;mixer.stopAllAction();const clip=mixer._root.userData.animations?.[Number(animation.value)];if(clip){mixer.clipAction(clip).reset().play();mixer.timeScale=paused?0:1}}
-async function showCharacter(){const f=files[Number(character.value)];if(!f)return;status.textContent='Loading '+f.split('/').pop();try{const raw=await archive.file(f).async('string');const gltf=await new Promise((resolve,reject)=>loader.parse(raw,'',resolve,reject));if(model)scene.remove(model);model=gltf.scene;scene.add(model);mixer=new THREE.AnimationMixer(model);model.userData.animations=gltf.animations;animation.replaceChildren(...gltf.animations.map((a,i)=>new Option(a.name||('Animation '+(i+1)),String(i))));let idle=gltf.animations.findIndex(a=>a.name==='Idle');animation.value=String(Math.max(0,idle));fit();selectAnimation();status.textContent=''}catch(e){status.textContent='Cannot load character: '+e.message;console.error(e)}}
-animation.onchange=selectAnimation;character.onchange=showCharacter;document.querySelector('#reset').onclick=fit;document.querySelector('#play').onclick=()=>{paused=!paused;if(mixer)mixer.timeScale=paused?0:1;document.querySelector('#play').textContent=paused?'Play':'Pause'};
-async function start(){try{const r=await fetch('./characters.zip');if(!r.ok)throw Error('characters.zip not found ('+r.status+')');const b=await r.arrayBuffer();archive=await JSZip.loadAsync(b);files=Object.keys(archive.files).filter(n=>n.toLowerCase().endsWith('.gltf')).sort();if(!files.length)throw Error('No .gltf files in archive');character.replaceChildren(...files.map((f,i)=>new Option(f.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' '),String(i))));document.querySelector('#count').textContent=files.length+' models';await showCharacter()}catch(e){status.textContent=e.message+' — upload the original ZIP to the repository as characters.zip';console.error(e)}}
-function resize(){const w=view.clientWidth,h=view.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}new ResizeObserver(resize).observe(view);renderer.setAnimationLoop(()=>{const d=clock.getDelta();if(mixer)mixer.update(d);controls.update();renderer.render(scene,camera)});start();
-</script></body></html>
+const play=document.querySelector('#play'), reset=document.querySelector('#reset'), colorView=document.querySelector('#colors');
+const telegram=window.Telegram?.WebApp;
+function syncViewport(){const height=telegram?.viewportHeight||window.visualViewport?.height||window.innerHeight;document.documentElement.style.setProperty('--app-height',height+'px')}
+telegram?.ready();telegram?.expand();telegram?.onEvent('viewportChanged',syncViewport);
+window.addEventListener('resize',syncViewport);window.visualViewport?.addEventListener('resize',syncViewport);syncViewport();
+
+async function boot(){
+  const scene=new THREE.Scene();scene.background=new THREE.Color('#101622');
+  const camera=new THREE.PerspectiveCamera(45,1,.01,500);
+  let renderer;
+  try{renderer=new THREE.WebGLRenderer({antialias:true})}catch{throw Error('3D graphics (WebGL) are unavailable in this browser. Please try Telegram or Chrome with WebGL enabled.')}
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  renderer.outputColorSpace=THREE.SRGBColorSpace;
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure=1;
+  view.appendChild(renderer.domElement);
+  scene.add(new THREE.HemisphereLight(0xffffff,0x8d9ab3,2));
+  const key=new THREE.DirectionalLight(0xffffff,2.5);key.position.set(3,6,5);scene.add(key);
+  const fill=new THREE.DirectionalLight(0xffffff,1);fill.position.set(-4,3,-3);scene.add(fill);
+  const controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.enablePan=false;
+  const loader=new GLTFLoader();const clock=new THREE.Clock();
+  let archive,files=[],model,mixer,clips=[],paused=false,requestId=0,currentBounds;
+  let boundsCache=new Map(),originalMaterials=new Map(),flatMaterials=new Map();
+  function fit(){
+    if(!model||!currentBounds)return;
+    const frame=cameraFrame(THREE,currentBounds,camera.aspect,camera.fov);
+    controls.enableDamping=false;controls.update();
+    controls.target.copy(frame.center);camera.position.copy(frame.position);
+    camera.near=frame.near;camera.far=frame.far;camera.updateProjectionMatrix();
+    controls.minDistance=frame.radius*.6;controls.maxDistance=frame.distance*6;
+    controls.update();controls.enableDamping=true;controls.saveState();
+  }
+  function selectAnimation(){
+    if(!mixer)return;
+    mixer.stopAllAction();
+    const clip=clips[Number(animation.value)];
+    if(clip)mixer.clipAction(clip).reset().play();
+    if(!boundsCache.has(clip))boundsCache.set(clip,animationBounds(THREE,model,mixer,clip));
+    currentBounds=boundsCache.get(clip);
+    mixer.timeScale=1;mixer.setTime(0);model.updateMatrixWorld(true);
+    mixer.timeScale=paused?0:1;fit();
+  }
+  function applyColors(){
+    for(const [mesh,material] of originalMaterials){
+      mesh.material=colorView.value==='original'?flatMaterials.get(mesh):material;
+    }
+  }
+  function disposeRoot(root){
+    if(!root)return;
+    const geometries=new Set(),materials=new Set();
+    root.traverse(o=>{if(o.isMesh){
+      geometries.add(o.geometry);
+      for(const source of [originalMaterials.get(o)||o.material,flatMaterials.get(o)]){
+        if(source)for(const m of Array.isArray(source)?source:[source])materials.add(m);
+      }
+    }});
+    geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());
+  }
+  async function showCharacter(){
+    const f=files[Number(character.value)];if(!f)return;
+    const request=++requestId;status.textContent='Loading '+f.split('/').pop();
+    animation.disabled=true;play.disabled=true;reset.disabled=true;
+    try{
+      const raw=await archive.file(f).async('string');
+      const gltf=await new Promise((resolve,reject)=>loader.parse(raw,'',resolve,reject));
+      if(request!==requestId){disposeRoot(gltf.scene);return}
+      if(model){mixer.stopAllAction();mixer.uncacheRoot(model);scene.remove(model);disposeRoot(model)}
+      originalMaterials=new Map();flatMaterials=new Map();boundsCache=new Map();
+      model=gltf.scene;clips=gltf.animations;
+      model.traverse(o=>{
+        if(!o.isMesh)return;
+        if(o.isSkinnedMesh)o.frustumCulled=false;
+        originalMaterials.set(o,o.material);
+        const makeFlat=m=>new THREE.MeshBasicMaterial({color:m.color,map:m.map,vertexColors:m.vertexColors,side:m.side,transparent:m.transparent,opacity:m.opacity,alphaTest:m.alphaTest,toneMapped:false});
+        flatMaterials.set(o,Array.isArray(o.material)?o.material.map(makeFlat):makeFlat(o.material));
+      });
+      scene.add(model);mixer=new THREE.AnimationMixer(model);
+      animation.replaceChildren(...clips.map((a,i)=>new Option(a.name||('Animation '+(i+1)),String(i))));
+      animation.value=String(Math.max(0,clips.findIndex(a=>a.name==='Idle')));
+      applyColors();selectAnimation();
+      document.querySelector('#note').textContent=f.endsWith('/BaseCharacter.gltf')?'BaseCharacter is a base mesh with neutral colors in the original file.':'';
+      animation.disabled=!clips.length;play.disabled=!clips.length;reset.disabled=false;status.textContent='';
+    }catch(e){if(request===requestId){status.textContent='Cannot load character: '+e.message;console.error(e)}}
+  }
+  animation.onchange=selectAnimation;character.onchange=showCharacter;reset.onclick=fit;colorView.onchange=applyColors;
+  play.onclick=()=>{paused=!paused;if(mixer)mixer.timeScale=paused?0:1;play.textContent=paused?'Play':'Pause'};
+  function resize(){
+    const w=Math.max(1,view.clientWidth),h=Math.max(1,view.clientHeight);
+    renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();fit();
+  }
+  new ResizeObserver(resize).observe(view);resize();
+  renderer.setAnimationLoop(()=>{const delta=Math.min(clock.getDelta(),.1);if(mixer)mixer.update(delta);controls.update();renderer.render(scene,camera)});
+  status.textContent='Downloading character pack…';
+  const response=await fetch('./characters.zip');if(!response.ok)throw Error('Character pack could not be downloaded ('+response.status+').');
+  archive=await JSZip.loadAsync(await response.arrayBuffer());
+  files=Object.keys(archive.files).filter(n=>n.toLowerCase().endsWith('.gltf')).sort();
+  if(!files.length)throw Error('No character models were found in the archive.');
+  character.replaceChildren(...files.map((f,i)=>new Option(f.split('/').pop().replace(/\.gltf$/i,'').replaceAll('_',' '),String(i))));
+  document.querySelector('#count').textContent=files.length+' models';
+  character.value=String(Math.max(0,files.findIndex(f=>f.endsWith('/Casual_Male.gltf'))));
+  character.disabled=false;await showCharacter();
+}
+boot().catch(e=>{status.textContent=e.message;document.querySelector('#count').textContent='Unable to load';console.error(e)});
+</script>
+</body>
+</html>
